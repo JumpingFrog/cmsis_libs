@@ -15,6 +15,10 @@ void i2c_init(void);
 
 uint32_t i2c_transfer(uint8_t * tx_d, uint32_t tx_len, uint8_t * rx_buf, uint32_t rx_len, uint32_t addr);
 
-void i2c_scan(void);
+int * i2c_scan(void);
 
 void i2c_exit(void);
+
+void i2c_callback(void *);
+
+void i2c_int(int state);

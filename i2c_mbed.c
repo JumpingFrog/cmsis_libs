@@ -28,6 +28,16 @@ uint32_t i2c_transfer(uint8_t * tx_d, uint32_t tx_len, uint8_t * rx_buf, uint32_
 	return I2C_MasterTransferData(I2C_DEV, i2cCfg, I2C_TRANSFER_POLLING);
 }
 
+void i2c_int_transfer(uint8_t * tx_d, uint32_t tx_len, uint8_t * rx_buf, uint32_t rx_len, uint32_t addr) { //i2c operation by interrupt
+	i2cCfg.tx_data = tx_d;
+	i2cCfg.tx_length = tx_len;
+	i2cCfg.rx_data = rx_buf;
+	i2cCfg.rx_length = rx_len;
+	i2cCfg.sl_addr7bit = addr;
+
+	I2C_MasterTransferData(I2C_DEV, i2cCfg, I2C_TRANSFER_POLLING);
+}
+
 uint8_t * i2c_scan() { //returns 128 byte array 1 if ack'd, 0 otherwise.
 	uint8_t ret[128];
 	uint8_t buf;
@@ -40,7 +50,11 @@ uint8_t * i2c_scan() { //returns 128 byte array 1 if ack'd, 0 otherwise.
 	return ret;
 }
 
-void setCallback(void *) {
+void i2c_callback(void *) {
+}
+
+void i2c_irq(Bool state) {
+	 I2C_IntCmd(I2C_DEV, state);
 }
 
 void i2c_exit(void) {

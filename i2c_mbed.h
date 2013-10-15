@@ -18,3 +18,7 @@ uint32_t i2c_transfer(uint8_t * tx_d, uint32_t tx_len, uint8_t * rx_buf, uint32_
 int * i2c_scan(void);
 
 void i2c_exit(void);
+
+void i2c_callback(void *);
+
+void i2c_irq(int state);
