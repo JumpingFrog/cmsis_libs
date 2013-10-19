@@ -11,6 +11,7 @@ void i2c_init(void) {
 	PINSEL_ConfigPin(&pcfg);
 	
 	pcfg.Pinnum = 1; //SCL
+	PINSEL_ConfigPin(&pcfg);
 	
 	I2C_Init(I2C_DEV, I2C_CLK);
 	I2C_Cmd(I2C_DEV, ENABLE); //ready to go
@@ -35,7 +36,7 @@ void i2c_int_transfer(uint8_t * tx_d, uint32_t tx_len, uint8_t * rx_buf, uint32_
 	i2cCfg.rx_length = rx_len;
 	i2cCfg.sl_addr7bit = addr;
 
-	I2C_MasterTransferData(I2C_DEV, i2cCfg, I2C_TRANSFER_POLLING);
+	I2C_MasterTransferData(I2C_DEV, i2cCfg, I2C_TRANSFER_INTERRUPT;
 }
 
 uint8_t * i2c_scan() { //returns 128 byte array 1 if ack'd, 0 otherwise.
@@ -47,7 +48,7 @@ uint8_t * i2c_scan() { //returns 128 byte array 1 if ack'd, 0 otherwise.
 			ret[addr] = 1;		
 		}
 	}
-	return ret;
+	return ret; //n.b. local scope error here.
 }
 
 void i2c_callback(void *) {
