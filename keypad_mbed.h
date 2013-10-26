@@ -3,4 +3,4 @@
 
 uint8_t send(uint8_t txd);
 
-void keypad_scan(void);
+char keypad_scan(void);
