@@ -62,6 +62,7 @@ void lcd_write(char * c) {
 }
 
 void lcd_writec(char c) {
+	c = (char)(c + ASCII_OFFSET);
 	uint8_t txd[] = {0x40, ((uint8_t)c)};
 	i2c_transfer(txd, 2, NULL, 0, LCD_ADDR);
 }
