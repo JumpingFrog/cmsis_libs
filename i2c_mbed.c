@@ -41,7 +41,7 @@ void i2c_int_transfer(uint8_t * tx_d, uint32_t tx_len, uint8_t * rx_buf, uint32_
 }
 
 uint8_t * i2c_scan() { //returns 128 byte array 1 if ack'd, 0 otherwise.
-	uint8_t ret[128];
+	static uint8_t ret[128];
 	uint8_t buf;
 	uint32_t addr = 0; 
 	for (; addr < 128; addr++) {
@@ -49,7 +49,7 @@ uint8_t * i2c_scan() { //returns 128 byte array 1 if ack'd, 0 otherwise.
 			ret[addr] = 1;		
 		}
 	}
-	return ret; //n.b. local scope error here.
+	return ret; //n.b. local scope error here. Not very efficent.
 }
 
 void i2c_callback(void * cb) {

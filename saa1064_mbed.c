@@ -1,6 +1,6 @@
 #include "saa1064_mbed.h"
 
-void led_ctrl(uint8_t dyn, uint8_t en13, uint8_t ent24) {
+void led_ctrl(uint8_t dyn, uint8_t en13, uint8_t en24) {
 	uint8_t txd[2];
 	txd[0] = 0x00; //control word
 	txd[1] = dyn | (en13 << 1) | (en24 << 2) | 0x50; //control byte to write.

@@ -1,7 +1,6 @@
 #include "keypad_mbed.h"
-#include "tty_mbed.h"
+//#include "tty_mbed.h"
 
-char tmp[128];
 
 char keymap[4][4] = { {'D', '#', '0', '*'}, {'C', '9', '8', '7'}, {'B', '6', '5', '4'}, {'A', '3', '2', '1'}};//used for returning chars
 
@@ -25,8 +24,7 @@ char keypad_scan(void) { //polls keypad till button pressed then returns.
 				rx = (~rx) & 0x0F;
 				for (row = 0; row < 4; row++) {
 					if ((1<<row) & rx) {
-						sprintf(tmp,"Col: %d, Row: %d, Key: %c\n\r",col, row, keymap[row][col]); 
-						tty_printf(tmp);
+						//tty_printf("Col: %d, Row: %d, Key: %c\n\r",col, row, keymap[row][col]);
 						return keymap[row][col]; //return from keymap
 					}					
 				}
