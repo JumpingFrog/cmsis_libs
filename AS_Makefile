@@ -1,0 +1,59 @@
+PKG=~/mbed
+
+ARCH=arm-none-eabi
+
+CODEBENCH=$(PKG)/CodeBenchEABI
+
+CC=$(CODEBENCH)/bin/$(ARCH)-gcc
+AS=$(CODEBENCH)/bin/$(ARCH)-as
+OBJCOPY=$(CODEBENCH)/bin/$(ARCH)-objcopy
+LD=$(CODEBENCH)/bin/$(ARCH)-ld
+
+GNU_VER=4.7.3
+
+THUMB2GNULIB =$(CODEBENCH)/$(ARCH)/lib/thumb2
+THUMB2GNULIB2=$(CODEBENCH)/lib/gcc/$(ARCH)/$(GNU_VER)/thumb2
+
+CMSIS=/home/david/mbed/cmsis
+CMSISINCLUDES=-I$(CMSIS)/include
+CMSISFL=$(CMSIS)/lib/core_cm3.o \
+	$(CMSIS)/lib/system_LPC17xx.o \
+	$(CMSIS)/lib/startup_LPC17xx.o
+LDSCRIPT = $(CMSIS)/lib/ldscript_rom_gnu.ld
+
+CFLAGS= -mcpu=cortex-m3  -mthumb  -Wall  -O0  -mapcs-frame  -D__thumb2__=1 \
+  -msoft-float  -gdwarf-2  -mno-sched-prolog  -fno-hosted  -mtune=cortex-m3 \
+  -march=armv7-m  -mfix-cortex-m3-ldrd   -ffunction-sections  -fdata-sections \
+  -fno-omit-frame-pointer -D__RAM_MODE__=0 $(CMSISINCLUDES) -I. 
+
+LDFLAGS=$(CMSISFL) -static -L$(THUMB2GNULIB) -L$(THUMB2GNULIB2) \
+           -lc -lg -lstdc++ -lsupc++  -lgcc -lm \
+	   -Xlinker -Map -Xlinker bin/lpc1700.map -Xlinker -T $(LDSCRIPT)
+
+LDFLAGS+=-L$(CMSIS)/lib -lDriversLPC17xxgnu
+
+EXECNAME= bin/out
+#assembly folder:
+ASSEMBLY = as
+
+OBJS = main tty_mbed
+
+symtable: 
+	@echo -e "\e[0;31mGenerating symbol table.\e[0m"
+	$(CC) -v
+
+all: main symtable
+	@echo -e "\e[0;31mAll sources compiled and assembled.\e[0m";
+	$(LD) $(LDFLAGS) $(OBJS).o
+	
+
+$(OBJS):
+	@echo -e "\e[0;32mCompling $@.c to assembly...\e[0m";
+	$(CC) $(CFLAGS) $(CMSISFL) $@.c -S -o $(ASSEMBLY)/$@.S
+	@echo -e "\e[0;32mAssembling $@.S...\e[0m";
+	$(AS) $(ASSEMBLY)/$@.S -o $@.o
+
+main: $(OBJS)
+
+
+
