@@ -1,6 +1,7 @@
 #include "tty_mbed.h"
 
 char tty_buf[TTY_BUF_LEN];
+char tty_obuf[TTY_BUF_LEN];
 
 void serial_init() {
 	UART_CFG_Type UARTConfigStruct;	
@@ -28,7 +29,7 @@ void serial_init() {
 
 void tty_init() {
 	serial_init();
-	tty_printf("Console started:\r\n");
+	tty_printf("\x1b[2J\x1b[0;0fConsole started:\r\n");
 }
 
 void tty_dump_regs() { //http://www.ethernut.de/en/documents/arm-inline-asm.html
@@ -73,13 +74,12 @@ void tty_dump_regs() { //http://www.ethernut.de/en/documents/arm-inline-asm.html
 	tty_printf("fp: 0x%x\n\r", tmp);
 	__asm volatile("mov %[res], lr\n\t" : [res] "=r" (tmp));
 	tty_printf("lr: 0x%x\n\r", tmp);
-	
 }
 
 void tty_printf(char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
-	vsprintf(tty_buf, fmt, args);
+	vsnprintf(tty_buf, TTY_BUF_LEN, fmt, args);
 	va_end(args);
 	char * tmp = tty_buf;
 	int len = 1;
@@ -87,4 +87,57 @@ void tty_printf(char *fmt, ...) {
 		len++;	
 	}
 	UART_Send((LPC_UART_TypeDef *)LPC_UART0,(uint8_t *)tty_buf,len, BLOCKING);
+}
+
+int tty_scanf(char *fmt, ...) {
+	int ret;
+	va_list args;
+	va_start(args, fmt);
+	ret = vsscanf(tty_gets(), fmt, args);
+	va_end(args);
+	return ret;
+}
+
+void tty_puts(char *c) {
+	char * tmp = c;
+	int len = 1;
+	while (*tmp++ != '\0') {
+		len++;
+	}
+	UART_Send(LPC_UART0,  (uint8_t *)c, len, BLOCKING);
+}
+
+void tty_putchar(char c) {
+	UART_SendByte(LPC_UART0, (uint8_t)c);
+}
+
+uint8_t tty_getchar(void) {
+	uint8_t tmp;
+	UART_Receive((LPC_UART_TypeDef *)LPC_UART0, &tmp, 1, BLOCKING);
+	return tmp;
+}
+
+char * tty_gets(void) {
+	int pos = 0;
+	for (; pos < (TTY_BUF_LEN -1); pos++) { //n.b. -1 to keep terminating char
+		//tty_printf("Pos %d\n\r", pos);
+		tty_obuf[pos] = (char)tty_getchar();
+		//tty_printf("Char %x\n\r", tty_obuf[pos]);
+		tty_putchar(tty_obuf[pos]);
+		if (tty_obuf[pos] == '\n' || tty_obuf[pos] == '\r') {
+			tty_obuf[pos] = '\0';
+			tty_puts("\n\r");
+			break;
+		}
+		else if (tty_obuf[pos] == '\b' || tty_obuf[pos] == (char)0x7F) { //Some terms send del not backspace 
+			if (pos > 0) {
+			pos -= 2;
+			}
+			else {
+			pos = -1;
+			}
+		}
+	}
+	tty_obuf[TTY_BUF_LEN -1] = '\0';
+	return tty_obuf;
 }

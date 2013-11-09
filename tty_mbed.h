@@ -12,3 +12,13 @@ void tty_init(void);
 void tty_dump_regs(void);
 
 void tty_printf(char *fmt, ...);
+
+int tty_scanf(char *fmt, ...);
+
+uint8_t tty_getchar(void);
+
+char * tty_gets(void);
+
+void tty_putchar(char c);
+
+void tty_puts(char *c);
