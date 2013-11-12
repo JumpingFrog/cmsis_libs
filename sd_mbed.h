@@ -1,7 +1,6 @@
 /* SD Mass storage driver for MBED
    David Wotherspoon - 2013 */
 
-
 #include "lpc17xx_ssp.h"
 #include "lpc17xx_pinsel.h"
 #include "lpc17xx_gpio.h"
@@ -66,7 +65,14 @@
 /* Misc */
 #define SD_BLOCK 512
 
-void sd_init(void);
-void sd_cs(int state);
-uint16_t spi_readwrite(uint8_t in);
+/* Public prototypes */
+void sd_init(void); //initialise sd card
+
 void sd_readblock(uint8_t * buf, uint32_t lba);
+void sd_writeblock(uint8_t *buf, uint32_t lba);
+void sd_cs(int state);
+void ssp_init(void);
+uint16_t spi_readwrite(uint8_t in);
+
+
+
