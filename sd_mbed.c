@@ -181,6 +181,7 @@ void sd_init(void) { //http://elm-chan.org/docs/mmc/mmc_e.html
 		tty_printf("Card did not respond to CMD8, assuming SDv1.\n\r");
 		sd_type = CARDTYPE_SDV1;
 		//TODO: Make this do stuff.
+		THROW("Not yet implemented for SD v1. Sorry :(");
 	}
 	else { //something dun goofed
 		THROW("Invalid response to CMD8.");	
@@ -207,7 +208,6 @@ void sd_readblock(uint8_t * buf, uint32_t lba) {
 	r1 = sd_cmdh(CMD17, lba, 0x01);
 	
 	ASSERT(r1 == 0x00, "CMD17 failed.");
-	sd_cs(0);
 
 	//tty_printf("ACCEPTED\n\r");
 	for (i = 0; i< SD_RETRY; i++) { //wait for 0xFE
@@ -219,8 +219,8 @@ void sd_readblock(uint8_t * buf, uint32_t lba) {
 	ASSERT(r1 == 0xFE, "Read timeout.");
 	
 	for (i=0; i< (SD_BLOCK); i++) {
-		*(buf+i) = spi_readwrite(0xFF);
-		tty_printf("Read byte: %d, Value was %x\n\r", i, *(buf+i));
+		*buf = spi_readwrite(0xFF);
+		tty_printf("%x", *buf++);
 	}
 	//IGNORE CRC (2 bytes)
 	spi_readwrite(0xFF);
@@ -229,6 +229,50 @@ void sd_readblock(uint8_t * buf, uint32_t lba) {
 	spi_readwrite(0xFF);
 	//DONE
 	sd_cmd(CMD12, 0, 0x01);
+}
+
+void sd_readblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
+	uint8_t r1;
+	int i, pkt, b;
+	if (sd_type == CARDTYPE_SDV2HC) {
+		lba <<= 9;	
+	}
+	r1 = sd_cmdh(CMD18, lba, 0x01);
+	ASSERT(r1 == 0x00, "CMD18 failed.");
+
+	for (pkt = 0; pkt < num; pkt++) {
+		for (i = 0; i< SD_RETRY; i++) { //wait for 0xFE (packet start data token)
+			r1 = spi_readwrite(0xFF);
+			if (r1 == 0xFE) {
+				break;
+			}
+		}
+		ASSERT(r1 == 0xFE, "CMD18 block wait timed out.");
+		for (b = 0; b < (SD_BLOCK); b++) { //read this block
+			*buf = spi_readwrite(0xFF);
+			tty_printf("%x", *buf++);
+		}
+		spi_readwrite(0xFF); //read CRC
+		spi_readwrite(0xFF);
+	}
+	r1 =  sd_cmdh(CMD12, 0x00, 0x01); //STOP
+	
+	for (i = 0; i< SD_RETRY; i++) { //wait for response from cmd
+		r1 = spi_readwrite(0xFF);
+		if (r1 == 0x00) {
+			break;		
+		}		
+	}
+	ASSERT(r1 == 0x00, "Card did not respond to CMD12.");
+	/* for (i = 0; i < SD_RETRY; i++) {
+		r1 = spi_readwrite(0xFF);
+		if (r1 == 0xFF) {
+			break;		
+		}
+	} */
+	while (spi_readwrite(0xFF) != 0xFF) { } //wait until card is not busy
+	sd_cs(1);
+	spi_readwrite(0xFF);
 }
 
 void sd_writeblock(uint8_t * buf, uint32_t lba) {
@@ -269,3 +313,40 @@ void sd_writeblock(uint8_t * buf, uint32_t lba) {
 	//DONE
 }
 
+void sd_writeblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
+	uint8_t r1;
+	int i, pkt;
+	if (sd_type == CARDTYPE_SDV2HC) {
+		lba <<= 9;	
+	}
+	r1 = sd_cmdh(CMD25, lba, 0x01);
+	ASSERT(r1 == 0x00, "CMD25 failed.");
+	
+	spi_readwrite(0xFF); //write 1 byte (as spec)
+	spi_readwrite(0xFF); //write 1 byte (as spec)
+
+	for (pkt = 0; pkt < num; pkt++) { //start writing bytes
+		tty_printf("Writing block %d\n\r", pkt);		
+		spi_readwrite(0xFC); //data token
+		for (i = 0; i<(SD_BLOCK); i++) { //data
+			spi_readwrite(*buf++);
+		}
+		spi_readwrite(0xFF);
+		spi_readwrite(0xFF); //dummy crc
+		
+		for (i = 0; i < SD_RETRY; i++) { //poll until we get non-0xFF (trans response)
+			r1 = spi_readwrite(0xFF);
+			if (r1 != 0xFF) {
+				break;		
+			}	
+		}
+		ASSERT((r1&0x0F) == 0x05, "Card rejected block.");
+		while (spi_readwrite(0xFF) != 0xFF) { } //wait until card is not busy
+	}
+	
+	spi_readwrite(0xFD);
+	while (spi_readwrite(0xFF) == 0xFF) { } //get to busy?
+	while (spi_readwrite(0xFF) != 0xFF) { } //wait until card is not busy
+	sd_cs(1); //disable
+	spi_readwrite(0xFF); //done
+}

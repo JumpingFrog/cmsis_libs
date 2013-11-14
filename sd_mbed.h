@@ -69,7 +69,9 @@
 void sd_init(void); //initialise sd card
 
 void sd_readblock(uint8_t * buf, uint32_t lba);
+void sd_readblocks(uint8_t * buf, uint32_t lba, uint32_t num);
 void sd_writeblock(uint8_t *buf, uint32_t lba);
+void sd_writeblocks(uint8_t * buf, uint32_t lba, uint32_t num);
 void sd_cs(int state);
 void ssp_init(void);
 uint16_t spi_readwrite(uint8_t in);
