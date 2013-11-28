@@ -8,7 +8,7 @@
 #include "tty_mbed.h"
 #include "dbg.h"
 
-//#define UoY
+#define UoY
 
 /* Pins */
 
@@ -65,16 +65,68 @@
 /* Misc */
 #define SD_BLOCK 512
 
-/* Public prototypes */
-void sd_init(void); //initialise sd card
 
-void sd_readblock(uint8_t * buf, uint32_t lba);
-void sd_readblocks(uint8_t * buf, uint32_t lba, uint32_t num);
-void sd_writeblock(uint8_t *buf, uint32_t lba);
-void sd_writeblocks(uint8_t * buf, uint32_t lba, uint32_t num);
+/* SD card info  - http://www.mikroe.com/download/eng/documents/development-tools/accessory-boards/storage/microsd-card-1gb/microsd_card_spec.pdf */
+typedef struct {
+	uint8_t mid; //manufacturer
+	char oid[2]; //oem
+	char pnm[5]; //product name
+	uint8_t prv; //revision
+	uint32_t psn; //serial num
+	uint16_t mdt; //manufacturer date
+} sd_cid;
+
+typedef struct { //
+	uint8_t csd_struct; //csd structure
+	uint8_t taac; //date read access time-1
+	uint8_t nsac; //access time in clock cycles.
+	uint8_t tran_speed; //max transfer rate
+	uint16_t ccc; //card command classes
+	uint8_t read_bl_len; //max read block len
+	uint8_t read_bl_partial; //partial blocks allowed?
+	uint8_t write_misalign; //write block misalignment
+	uint8_t read_misalign; //read block misalignment
+	uint8_t dsr; //dsr implemented?
+	uint16_t size; //device size
+	uint8_t r_curr_min; //read current min
+	uint8_t r_curr_max; //read current max
+	uint8_t w_curr_min; //write current min
+	uint8_t w_curr_max; //write current max
+	uint8_t s_mult; //size multiplier
+	uint8_t erase_en; //single block erase?
+	uint8_t sector_size; //erase sector size
+	uint8_t wp_size; //write protect size
+	uint8_t wp_en; //write protect enable
+	uint8_t r2w_factor; //write speed factor
+	uint8_t write_bl_len; //max write block len
+	uint8_t write_bl_partial; //partial block writes allowed?
+	uint8_t ff_grp; //file format group
+	uint8_t copy; //copy flag
+	uint8_t perm_wp; //permanent write protect
+	uint8_t tmp_wp; //temporary write protect
+	uint8_t ff; //file format
+} sd_csd;
+
+typedef struct {
+	sd_cid cid;
+	sd_csd csd;
+	uint32_t blocksize;
+	uint32_t capacity;
+	uint32_t space_total;
+	uint32_t block_count;
+} sd_info;
+
+/* Public prototypes */
+uint8_t sd_init(void); //initialise sd card
+
+uint8_t sd_readblock(uint8_t * buf, uint32_t lba);
+uint8_t sd_readblocks(uint8_t * buf, uint32_t lba, uint32_t num);
+uint8_t sd_writeblock(uint8_t *buf, uint32_t lba);
+uint8_t sd_writeblocks(uint8_t * buf, uint32_t lba, uint32_t num);
 void sd_cs(int state);
+void sd_wl(int state);
+void sd_rl(int state);
 void ssp_init(void);
 uint16_t spi_readwrite(uint8_t in);
-
-
+sd_info* sd_readinfo(void);
 

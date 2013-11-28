@@ -1,13 +1,14 @@
 #include "sd_mbed.h"
 
 SSP_DATA_SETUP_Type sd_data;
-int const SD_RETRY = 200;
+int const SD_RETRY = 400;
 int sd_type;
+sd_info card_info;
+SSP_CFG_Type sspcfg;
 
 void ssp_init() { //initalise ssp for the SD
 	sd_cs(1); //disable the card. (active low)
 	PINSEL_CFG_Type pcfg; //pin configuration
-	SSP_CFG_Type sspcfg;
 
 	pcfg.Portnum = SD_PORT;
 	pcfg.OpenDrain = 0;
@@ -32,12 +33,11 @@ void ssp_init() { //initalise ssp for the SD
 	PINSEL_ConfigPin(&pcfg);
 
 	GPIO_SetDir(SD_PORT, (1<<SD_CS), 1); //GPIO for CS
-
 	//SD_CD - Not on UoY Host board, just hope SD is inserted.
 	
 
 	SSP_ConfigStructInit(&sspcfg); //Configure struct
-	sspcfg.ClockRate = 400000; //must be 400KHz
+	sspcfg.ClockRate = 2000000; //must be 400KHz
 
 	SSP_Init(SD_DEV, &sspcfg);
 	SSP_Cmd(SD_DEV, ENABLE);
@@ -111,7 +111,7 @@ uint16_t spi_readwrite(uint8_t in) {
 }
 
 
-void sd_init(void) { //http://elm-chan.org/docs/mmc/mmc_e.html
+uint8_t sd_init(void) { //http://elm-chan.org/docs/mmc/mmc_e.html
 	int i;
 	int r1;
 	uint8_t buf[6] = {0};
@@ -170,6 +170,7 @@ void sd_init(void) { //http://elm-chan.org/docs/mmc/mmc_e.html
 		if (buf[0] & 0x40) {
 			sd_type = CARDTYPE_SDV2HC;
 			tty_puts("Card is SD v2 HC\r\n");
+			return 0x00;
 		}
 		else {
 			sd_type = CARDTYPE_SDV2;
@@ -186,6 +187,26 @@ void sd_init(void) { //http://elm-chan.org/docs/mmc/mmc_e.html
 	else { //something dun goofed
 		THROW("Invalid response to CMD8.");	
 	}
+	return 0x02; //no medium error
+}
+
+
+void sd_rl(int state) {
+	if (state) {
+		GPIO_SetValue(1, (1<<18));
+	}
+	else {
+		GPIO_ClearValue(1, (1<<18));
+	}
+}
+
+void sd_wl(int state) {
+	if (state) {
+		GPIO_SetValue(1, (1<<23));
+	}
+	else {
+		GPIO_ClearValue(1, (1<<23));
+	}
 }
 
 void sd_cs(int state) { //chipselect
@@ -197,11 +218,11 @@ void sd_cs(int state) { //chipselect
 	}
 }
 
-void sd_readblock(uint8_t * buf, uint32_t lba) {
+uint8_t sd_readblock(uint8_t * buf, uint32_t lba) {
 	uint8_t r1;
 	int i;
 
-	if (sd_type == CARDTYPE_SDV2HC) {
+	if (sd_type != CARDTYPE_SDV2HC) {
 		lba <<= 9; //shift lba up 512 (block size)
 	}
 
@@ -219,8 +240,7 @@ void sd_readblock(uint8_t * buf, uint32_t lba) {
 	ASSERT(r1 == 0xFE, "Read timeout.");
 	
 	for (i=0; i< (SD_BLOCK); i++) {
-		*buf = spi_readwrite(0xFF);
-		tty_printf("%x", *buf++);
+		*buf++ = spi_readwrite(0xFF);
 	}
 	//IGNORE CRC (2 bytes)
 	spi_readwrite(0xFF);
@@ -228,13 +248,13 @@ void sd_readblock(uint8_t * buf, uint32_t lba) {
 	sd_cs(1);
 	spi_readwrite(0xFF);
 	//DONE
-	sd_cmd(CMD12, 0, 0x01);
+	return 0x00;
 }
 
-void sd_readblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
+uint8_t sd_readblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
 	uint8_t r1;
 	int i, pkt, b;
-	if (sd_type == CARDTYPE_SDV2HC) {
+	if (sd_type != CARDTYPE_SDV2HC) {
 		lba <<= 9;	
 	}
 	r1 = sd_cmdh(CMD18, lba, 0x01);
@@ -249,8 +269,7 @@ void sd_readblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
 		}
 		ASSERT(r1 == 0xFE, "CMD18 block wait timed out.");
 		for (b = 0; b < (SD_BLOCK); b++) { //read this block
-			*buf = spi_readwrite(0xFF);
-			tty_printf("%x", *buf++);
+			*buf++ = spi_readwrite(0xFF);
 		}
 		spi_readwrite(0xFF); //read CRC
 		spi_readwrite(0xFF);
@@ -273,13 +292,14 @@ void sd_readblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
 	while (spi_readwrite(0xFF) != 0xFF) { } //wait until card is not busy
 	sd_cs(1);
 	spi_readwrite(0xFF);
+	return 0;
 }
 
-void sd_writeblock(uint8_t * buf, uint32_t lba) {
+uint8_t sd_writeblock(uint8_t * buf, uint32_t lba) {
 	uint8_t r1;
 	int i;
 
-	if (sd_type == CARDTYPE_SDV2HC) {
+	if (sd_type != CARDTYPE_SDV2HC) {
 		lba <<= 9; //shift lba up 512 (block size)
 	}
 
@@ -305,18 +325,18 @@ void sd_writeblock(uint8_t * buf, uint32_t lba) {
 			break;		
 		}	
 	}
-	tty_printf("CMD24 returned %x (%d retries)\n\r", r1, i);
 	ASSERT((r1 & 0x0F) == 0x05, "Card rejected block."); 
 	while (spi_readwrite(0xFF) != 0xFF) { } //wait until card is not busy
 	sd_cs(1); //disable
 	spi_readwrite(0xFF);
 	//DONE
+	return 0x00;
 }
 
-void sd_writeblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
+uint8_t sd_writeblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
 	uint8_t r1;
 	int i, pkt;
-	if (sd_type == CARDTYPE_SDV2HC) {
+	if (sd_type != CARDTYPE_SDV2HC) {
 		lba <<= 9;	
 	}
 	r1 = sd_cmdh(CMD25, lba, 0x01);
@@ -325,8 +345,7 @@ void sd_writeblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
 	spi_readwrite(0xFF); //write 1 byte (as spec)
 	spi_readwrite(0xFF); //write 1 byte (as spec)
 
-	for (pkt = 0; pkt < num; pkt++) { //start writing bytes
-		tty_printf("Writing block %d\n\r", pkt);		
+	for (pkt = 0; pkt < num; pkt++) { //start writing bytes		
 		spi_readwrite(0xFC); //data token
 		for (i = 0; i<(SD_BLOCK); i++) { //data
 			spi_readwrite(*buf++);
@@ -344,9 +363,119 @@ void sd_writeblocks(uint8_t * buf, uint32_t lba, uint32_t num) {
 		while (spi_readwrite(0xFF) != 0xFF) { } //wait until card is not busy
 	}
 	
-	spi_readwrite(0xFD);
+	spi_readwrite(0xFD); //stop tran
 	while (spi_readwrite(0xFF) == 0xFF) { } //get to busy?
 	while (spi_readwrite(0xFF) != 0xFF) { } //wait until card is not busy
 	sd_cs(1); //disable
 	spi_readwrite(0xFF); //done
+	return 0x00;
+}
+
+sd_info* sd_readinfo(void) { //populates the sd info tables
+	uint8_t r1;
+	int i;
+	uint8_t buf[16];
+	//Read CID
+	r1 = sd_cmdh(CMD10, 0x00, 0x01);
+	
+	ASSERT(r1 == 0x00, "CMD10 failed."); 
+
+	for (i = 0; i< 16; i++) { //wait for 0xFE
+		r1 = spi_readwrite(0xFF);
+		if (r1 == 0xFE) {
+			break;
+		}
+	}
+	ASSERT(r1 == 0xFE, "CID read timeout.");
+	
+	for (i=0; i< (SD_BLOCK); i++) {
+		buf[i] = spi_readwrite(0xFF);
+	}
+	sd_cs(1);
+	spi_readwrite(0xFF);
+
+	//Populate CID
+	card_info.cid.mid = buf[0];
+	card_info.cid.oid[0] = buf[1];
+	card_info.cid.oid[1] = buf[2];
+	card_info.cid.pnm[0] = buf[3];
+	card_info.cid.pnm[1] = buf[4];
+	card_info.cid.pnm[2] = buf[5];
+	card_info.cid.pnm[3] = buf[6];
+	card_info.cid.pnm[4] = buf[7];
+	card_info.cid.prv = buf[8];
+	card_info.cid.psn = buf[9]<<24 | buf[10]<<16 | buf[11]<<8 | buf[12];
+	card_info.cid.mdt = (buf[13]*0x0F)<<8 | buf[14];
+
+	r1 = sd_cmdh(CMD9, 0x00, 0x01); //read csd
+	ASSERT(r1 == 0x00, "CMD9 failed.");
+
+	for (i = 0; i< 16; i++) { //wait for 0xFE
+		r1 = spi_readwrite(0xFF);
+		if (r1 == 0xFE) {
+			break;
+		}
+	}
+	ASSERT(r1 == 0xFE, "CSD read timeout.");
+
+	for (i=0; i< (SD_BLOCK); i++) {
+		buf[i] = spi_readwrite(0xFF);
+	}
+
+	sd_cs(1);
+	spi_readwrite(0xFF);
+	
+	//Populate CSD
+	card_info.csd.csd_struct = (buf[0]&0xC0)>>6;
+	card_info.csd.taac = buf[1];
+	card_info.csd.nsac = buf[2];
+	card_info.csd.tran_speed = buf[3];
+	card_info.csd.ccc = (buf[4]<<4) | ((buf[5]&0xF0)>>4);
+	card_info.csd.read_bl_len = buf[5]&0x0F;
+	card_info.csd.read_bl_partial = (buf[6]&0x80)>>7;
+	card_info.csd.write_misalign = (buf[6]&0x40)>>6;
+	card_info.csd.read_misalign = (buf[6]&0x20)>>5;
+	card_info.csd.dsr = (buf[6]&0x10)>>4;
+	card_info.csd.size = ((buf[6]&0x03)<<10) | (buf[7]<<2) | ((buf[8]&0xC0)>>6);
+	card_info.csd.r_curr_min = (buf[8]&0x38)>>3;
+	card_info.csd.r_curr_max = (buf[8]&0x07);
+	card_info.csd.w_curr_min = (buf[9]&0xE0)>>5;
+	card_info.csd.w_curr_max = (buf[9]&0x1C)>>2;
+	card_info.csd.s_mult = ((buf[9]&0x03)<<1) | ((buf[10] & 0x80)>>7); //check
+	card_info.csd.erase_en = (buf[10]&0x40)>>6;
+	card_info.csd.sector_size = ((buf[10]&0x3F)<<1) | ((buf[11]&0x80)>>7);
+	card_info.csd.wp_size = (buf[11]&0xEF)>>1;
+	card_info.csd.wp_en = (buf[12]&0x80)>>7;
+	card_info.csd.r2w_factor = (buf[12]&0x1C)>>2;
+	card_info.csd.write_bl_len = ((buf[12]&0x03)<<2) | ((buf[13]&0xC0)>>6);
+	card_info.csd.write_bl_partial = (buf[13]&0x20)>>5;
+	card_info.csd.ff_grp = (buf[14]&0x80)>>7;
+	card_info.csd.copy = (buf[14]&0x40)>>6;
+	card_info.csd.perm_wp = (buf[14]&0x20)>>5;
+	card_info.csd.tmp_wp = (buf[15]&0x10)>>4;
+	card_info.csd.ff = (buf[15]&0x0C)>>2;
+
+	switch (card_info.csd.read_bl_len) {
+		case 9:
+			card_info.blocksize = 512;
+			break;
+		case 10:
+			card_info.blocksize = 1024;
+			break;
+		case 11:
+			card_info.blocksize = 2048;
+			break;
+		default:
+			THROW("Invalid block length.");
+			break;
+	}
+	ASSERT(card_info.blocksize == 512, "Only implemented for 512 byte block cards.");
+	tty_puts("1\n\r");
+	if (sd_type == CARDTYPE_SDV2HC) {
+		card_info.capacity = (buf[7]&0x3F)<<16 | buf[8]<<8 | buf[9];
+	}
+	tty_puts("2\n\r");
+	card_info.capacity = (card_info.capacity+1)*512;
+	tty_puts("3\n\r");
+	return &card_info;
 }
